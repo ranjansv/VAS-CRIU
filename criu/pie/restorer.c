@@ -16,6 +16,7 @@
 #include <sched.h>
 #include <sys/resource.h>
 #include <signal.h>
+#include <mvas/vas.h>
 
 #include "int.h"
 #include "types.h"
@@ -507,63 +508,63 @@ static long restore_self_exe_late(struct task_restore_args *args)
 	return ret;
 }
 
-static unsigned long restore_mapping(VmaEntry *vma_entry)
-{
-	int prot	= vma_entry->prot;
-	int flags	= vma_entry->flags | MAP_FIXED;
-	unsigned long addr;
-
-	if (vma_entry_is(vma_entry, VMA_AREA_SYSVIPC)) {
-		int att_flags;
-		/*
-		 * See comment in open_shmem_sysv() for what SYSV_SHMEM_SKIP_FD
-		 * means and why we check for PROT_EXEC few lines below.
-		 */
-		if (vma_entry->fd == SYSV_SHMEM_SKIP_FD)
-			return vma_entry->start;
-
-		if (vma_entry->prot & PROT_EXEC) {
-			att_flags = 0;
-			vma_entry->prot &= ~PROT_EXEC;
-		} else
-			att_flags = SHM_RDONLY;
-
-		pr_info("Attach SYSV shmem %d at %"PRIx64"\n", (int)vma_entry->fd, vma_entry->start);
-		return sys_shmat(vma_entry->fd, decode_pointer(vma_entry->start), att_flags);
-	}
-
-	/*
-	 * Restore or shared mappings are tricky, since
-	 * we open anonymous mapping via map_files/
-	 * MAP_ANONYMOUS should be eliminated so fd would
-	 * be taken into account by a kernel.
-	 */
-	if (vma_entry_is(vma_entry, VMA_ANON_SHARED) && (vma_entry->fd != -1UL))
-		flags &= ~MAP_ANONYMOUS;
-
-	/* A mapping of file with MAP_SHARED is up to date */
-	if (vma_entry->fd == -1 || !(vma_entry->flags & MAP_SHARED))
-		prot |= PROT_WRITE;
-
-	pr_debug("\tmmap(%"PRIx64" -> %"PRIx64", %x %x %d)\n",
-			vma_entry->start, vma_entry->end,
-			prot, flags, (int)vma_entry->fd);
-	/*
-	 * Should map memory here. Note we map them as
-	 * writable since we're going to restore page
-	 * contents.
-	 */
-	addr = sys_mmap(decode_pointer(vma_entry->start),
-			vma_entry_len(vma_entry),
-			prot, flags,
-			vma_entry->fd,
-			vma_entry->pgoff);
-
-	if (vma_entry->fd != -1)
-		sys_close(vma_entry->fd);
-
-	return addr;
-}
+//static unsigned long restore_mapping(VmaEntry *vma_entry)
+//{
+//	int prot	= vma_entry->prot;
+//	int flags	= vma_entry->flags | MAP_FIXED;
+//	unsigned long addr;
+//
+//	if (vma_entry_is(vma_entry, VMA_AREA_SYSVIPC)) {
+//		int att_flags;
+//		/*
+//		 * See comment in open_shmem_sysv() for what SYSV_SHMEM_SKIP_FD
+//		 * means and why we check for PROT_EXEC few lines below.
+//		 */
+//		if (vma_entry->fd == SYSV_SHMEM_SKIP_FD)
+//			return vma_entry->start;
+//
+//		if (vma_entry->prot & PROT_EXEC) {
+//			att_flags = 0;
+//			vma_entry->prot &= ~PROT_EXEC;
+//		} else
+//			att_flags = SHM_RDONLY;
+//
+//		pr_info("Attach SYSV shmem %d at %"PRIx64"\n", (int)vma_entry->fd, vma_entry->start);
+//		return sys_shmat(vma_entry->fd, decode_pointer(vma_entry->start), att_flags);
+//	}
+//
+//	/*
+//	 * Restore or shared mappings are tricky, since
+//	 * we open anonymous mapping via map_files/
+//	 * MAP_ANONYMOUS should be eliminated so fd would
+//	 * be taken into account by a kernel.
+//	 */
+//	if (vma_entry_is(vma_entry, VMA_ANON_SHARED) && (vma_entry->fd != -1UL))
+//		flags &= ~MAP_ANONYMOUS;
+//
+//	/* A mapping of file with MAP_SHARED is up to date */
+//	if (vma_entry->fd == -1 || !(vma_entry->flags & MAP_SHARED))
+//		prot |= PROT_WRITE;
+//
+//	pr_debug("\tmmap(%"PRIx64" -> %"PRIx64", %x %x %d)\n",
+//			vma_entry->start, vma_entry->end,
+//			prot, flags, (int)vma_entry->fd);
+//	/*
+//	 * Should map memory here. Note we map them as
+//	 * writable since we're going to restore page
+//	 * contents.
+//	 */
+//	addr = sys_mmap(decode_pointer(vma_entry->start),
+//			vma_entry_len(vma_entry),
+//			prot, flags,
+//			vma_entry->fd,
+//			vma_entry->pgoff);
+//
+//	if (vma_entry->fd != -1)
+//		sys_close(vma_entry->fd);
+//
+//	return addr;
+//}
 
 /*
  * This restores aio ring header, content, head and in-kernel position
@@ -717,81 +718,81 @@ static void rst_tcp_socks_all(struct task_restore_args *ta)
 		rst_tcp_repair_off(&ta->tcp_socks[i]);
 }
 
-static int vma_remap(unsigned long src, unsigned long dst, unsigned long len)
-{
-	unsigned long guard = 0, tmp;
-
-	pr_info("Remap %lx->%lx len %lx\n", src, dst, len);
-
-	if (src - dst < len)
-		guard = dst;
-	else if (dst - src < len)
-		guard = dst + len - PAGE_SIZE;
-
-	if (src == dst)
-		return 0;
-
-	if (guard != 0) {
-		/*
-		 * mremap() returns an error if a target and source vma-s are
-		 * overlapped. In this case the source vma are remapped in
-		 * a temporary place and then remapped to the target address.
-		 * Here is one hack to find non-ovelapped temporary place.
-		 *
-		 * 1. initial placement. We need to move src -> tgt.
-		 * |       |+++++src+++++|
-		 * |-----tgt-----|       |
-		 *
-		 * 2. map a guard page at the non-ovelapped border of a target vma.
-		 * |       |+++++src+++++|
-		 * |G|----tgt----|       |
-		 *
-		 * 3. remap src to any other place.
-		 *    G prevents src from being remaped on tgt again
-		 * |       |-------------| -> |+++++src+++++|
-		 * |G|---tgt-----|                          |
-		 *
-		 * 4. remap src to tgt, no overlapping any longer
-		 * |+++++src+++++|   <----    |-------------|
-		 * |G|---tgt-----|                          |
-		 */
-
-		unsigned long addr;
-
-		/* Map guard page (step 2) */
-		tmp = sys_mmap((void *) guard, PAGE_SIZE, PROT_NONE,
-					MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-		if (tmp != guard) {
-			pr_err("Unable to map a guard page %lx (%lx)\n", guard, tmp);
-			return -1;
-		}
-
-		/* Move src to non-overlapping place (step 3) */
-		addr = sys_mmap(NULL, len, PROT_NONE,
-					MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-		if (addr == (unsigned long) MAP_FAILED) {
-			pr_err("Unable to reserve memory (%lx)\n", addr);
-			return -1;
-		}
-
-		tmp = sys_mremap(src, len, len,
-					MREMAP_MAYMOVE | MREMAP_FIXED, addr);
-		if (tmp != addr) {
-			pr_err("Unable to remap %lx -> %lx (%lx)\n", src, addr, tmp);
-			return -1;
-		}
-
-		src = addr;
-	}
-
-	tmp = sys_mremap(src, len, len, MREMAP_MAYMOVE | MREMAP_FIXED, dst);
-	if (tmp != dst) {
-		pr_err("Unable to remap %lx -> %lx\n", src, dst);
-		return -1;
-	}
-
-	return 0;
-}
+//static int vma_remap(unsigned long src, unsigned long dst, unsigned long len)
+//{
+//	unsigned long guard = 0, tmp;
+//
+//	pr_info("Remap %lx->%lx len %lx\n", src, dst, len);
+//
+//	if (src - dst < len)
+//		guard = dst;
+//	else if (dst - src < len)
+//		guard = dst + len - PAGE_SIZE;
+//
+//	if (src == dst)
+//		return 0;
+//
+//	if (guard != 0) {
+//		/*
+//		 * mremap() returns an error if a target and source vma-s are
+//		 * overlapped. In this case the source vma are remapped in
+//		 * a temporary place and then remapped to the target address.
+//		 * Here is one hack to find non-ovelapped temporary place.
+//		 *
+//		 * 1. initial placement. We need to move src -> tgt.
+//		 * |       |+++++src+++++|
+//		 * |-----tgt-----|       |
+//		 *
+//		 * 2. map a guard page at the non-ovelapped border of a target vma.
+//		 * |       |+++++src+++++|
+//		 * |G|----tgt----|       |
+//		 *
+//		 * 3. remap src to any other place.
+//		 *    G prevents src from being remaped on tgt again
+//		 * |       |-------------| -> |+++++src+++++|
+//		 * |G|---tgt-----|                          |
+//		 *
+//		 * 4. remap src to tgt, no overlapping any longer
+//		 * |+++++src+++++|   <----    |-------------|
+//		 * |G|---tgt-----|                          |
+//		 */
+//
+//		unsigned long addr;
+//
+//		/* Map guard page (step 2) */
+//		tmp = sys_mmap((void *) guard, PAGE_SIZE, PROT_NONE,
+//					MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+//		if (tmp != guard) {
+//			pr_err("Unable to map a guard page %lx (%lx)\n", guard, tmp);
+//			return -1;
+//		}
+//
+//		/* Move src to non-overlapping place (step 3) */
+//		addr = sys_mmap(NULL, len, PROT_NONE,
+//					MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+//		if (addr == (unsigned long) MAP_FAILED) {
+//			pr_err("Unable to reserve memory (%lx)\n", addr);
+//			return -1;
+//		}
+//
+//		tmp = sys_mremap(src, len, len,
+//					MREMAP_MAYMOVE | MREMAP_FIXED, addr);
+//		if (tmp != addr) {
+//			pr_err("Unable to remap %lx -> %lx (%lx)\n", src, addr, tmp);
+//			return -1;
+//		}
+//
+//		src = addr;
+//	}
+//
+//	tmp = sys_mremap(src, len, len, MREMAP_MAYMOVE | MREMAP_FIXED, dst);
+//	if (tmp != dst) {
+//		pr_err("Unable to remap %lx -> %lx\n", src, dst);
+//		return -1;
+//	}
+//
+//	return 0;
+//}
 
 static int timerfd_arm(struct task_restore_args *args)
 {
@@ -1025,8 +1026,8 @@ long __export_restore_task(struct task_restore_args *args)
 {
 	long ret = -1;
 	int i;
-	VmaEntry *vma_entry;
-	unsigned long va;
+//	VmaEntry *vma_entry;
+//	unsigned long va;
 
 	struct rt_sigframe *rt_sigframe;
 	struct prctl_mm_map prctl_map;
@@ -1072,61 +1073,61 @@ long __export_restore_task(struct task_restore_args *args)
 				bootstrap_start, bootstrap_len, args->task_size))
 		goto core_restore_end;
 
-	/* Shift private vma-s to the left */
-	for (i = 0; i < args->vmas_n; i++) {
-		vma_entry = args->vmas + i;
-
-		if (!vma_entry_is_private(vma_entry, args->task_size))
-			continue;
-
-		if (vma_entry->end >= args->task_size)
-			continue;
-
-		if (vma_entry->start > vma_entry->shmid)
-			break;
-
-		if (vma_remap(vma_premmaped_start(vma_entry),
-				vma_entry->start, vma_entry_len(vma_entry)))
-			goto core_restore_end;
-	}
-
-	/* Shift private vma-s to the right */
-	for (i = args->vmas_n - 1; i >= 0; i--) {
-		vma_entry = args->vmas + i;
-
-		if (!vma_entry_is_private(vma_entry, args->task_size))
-			continue;
-
-		if (vma_entry->start > args->task_size)
-			continue;
-
-		if (vma_entry->start < vma_entry->shmid)
-			break;
-
-		if (vma_remap(vma_premmaped_start(vma_entry),
-				vma_entry->start, vma_entry_len(vma_entry)))
-			goto core_restore_end;
-	}
-
-	/*
-	 * OK, lets try to map new one.
-	 */
-	for (i = 0; i < args->vmas_n; i++) {
-		vma_entry = args->vmas + i;
-
-		if (!vma_entry_is(vma_entry, VMA_AREA_REGULAR))
-			continue;
-
-		if (vma_entry_is_private(vma_entry, args->task_size))
-			continue;
-
-		va = restore_mapping(vma_entry);
-
-		if (va != vma_entry->start) {
-			pr_err("Can't restore %"PRIx64" mapping with %lx\n", vma_entry->start, va);
-			goto core_restore_end;
-		}
-	}
+//	/* Shift private vma-s to the left */
+//	for (i = 0; i < args->vmas_n; i++) {
+//		vma_entry = args->vmas + i;
+//
+//		if (!vma_entry_is_private(vma_entry, args->task_size))
+//			continue;
+//
+//		if (vma_entry->end >= args->task_size)
+//			continue;
+//
+//		if (vma_entry->start > vma_entry->shmid)
+//			break;
+//
+//		if (vma_remap(vma_premmaped_start(vma_entry),
+//				vma_entry->start, vma_entry_len(vma_entry)))
+//			goto core_restore_end;
+//	}
+//
+//	/* Shift private vma-s to the right */
+//	for (i = args->vmas_n - 1; i >= 0; i--) {
+//		vma_entry = args->vmas + i;
+//
+//		if (!vma_entry_is_private(vma_entry, args->task_size))
+//			continue;
+//
+//		if (vma_entry->start > args->task_size)
+//			continue;
+//
+//		if (vma_entry->start < vma_entry->shmid)
+//			break;
+//
+//		if (vma_remap(vma_premmaped_start(vma_entry),
+//				vma_entry->start, vma_entry_len(vma_entry)))
+//			goto core_restore_end;
+//	}
+//
+//	/*
+//	 * OK, lets try to map new one.
+//	 */
+//	for (i = 0; i < args->vmas_n; i++) {
+//		vma_entry = args->vmas + i;
+//
+//		if (!vma_entry_is(vma_entry, VMA_AREA_REGULAR))
+//			continue;
+//
+//		if (vma_entry_is_private(vma_entry, args->task_size))
+//			continue;
+//
+//		va = restore_mapping(vma_entry);
+//
+//		if (va != vma_entry->start) {
+//			pr_err("Can't restore %"PRIx64" mapping with %lx\n", vma_entry->start, va);
+//			goto core_restore_end;
+//		}
+//	}
 
 #ifdef CONFIG_VDSO
 	/*
@@ -1144,58 +1145,62 @@ long __export_restore_task(struct task_restore_args *args)
 	}
 #endif
 
-	/*
-	 * Walk though all VMAs again to drop PROT_WRITE
-	 * if it was not there.
-	 */
-	for (i = 0; i < args->vmas_n; i++) {
-		vma_entry = args->vmas + i;
-
-		if (!(vma_entry_is(vma_entry, VMA_AREA_REGULAR)))
-			continue;
-
-		if (vma_entry->prot & PROT_WRITE)
-			continue;
-
-		sys_mprotect(decode_pointer(vma_entry->start),
-			     vma_entry_len(vma_entry),
-			     vma_entry->prot);
-	}
-
-	/*
-	 * Now when all VMAs are in their places time to set
-	 * up AIO rings.
-	 */
-
+//	/*
+//	 * Walk though all VMAs again to drop PROT_WRITE
+//	 * if it was not there.
+//	 */
+//	for (i = 0; i < args->vmas_n; i++) {
+//		vma_entry = args->vmas + i;
+//
+//		if (!(vma_entry_is(vma_entry, VMA_AREA_REGULAR)))
+//			continue;
+//
+//		if (vma_entry->prot & PROT_WRITE)
+//			continue;
+//
+//		sys_mprotect(decode_pointer(vma_entry->start),
+//			     vma_entry_len(vma_entry),
+//			     vma_entry->prot);
+//	}
+//
+//	/*
+//	 * Now when all VMAs are in their places time to set
+//	 * up AIO rings.
+//	 */
+//
 	for (i = 0; i < args->rings_n; i++)
 		if (restore_aio_ring(&args->rings[i]) < 0)
 			goto core_restore_end;
-
-	/*
-	 * Finally restore madivse() bits
-	 */
-	for (i = 0; i < args->vmas_n; i++) {
-		unsigned long m;
-
-		vma_entry = args->vmas + i;
-		if (!vma_entry->has_madv || !vma_entry->madv)
-			continue;
-
-		for (m = 0; m < sizeof(vma_entry->madv) * 8; m++) {
-			if (vma_entry->madv & (1ul << m)) {
-				ret = sys_madvise(vma_entry->start,
-						  vma_entry_len(vma_entry),
-						  m);
-				if (ret) {
-					pr_err("madvise(%"PRIx64", %"PRIu64", %ld) "
-					       "failed with %ld\n",
-						vma_entry->start,
-						vma_entry_len(vma_entry),
-						m, ret);
-					goto core_restore_end;
-				}
-			}
-		}
+//
+//	/*
+//	 * Finally restore madivse() bits
+//	 */
+//	for (i = 0; i < args->vmas_n; i++) {
+//		unsigned long m;
+//
+//		vma_entry = args->vmas + i;
+//		if (!vma_entry->has_madv || !vma_entry->madv)
+//			continue;
+//
+//		for (m = 0; m < sizeof(vma_entry->madv) * 8; m++) {
+//			if (vma_entry->madv & (1ul << m)) {
+//				ret = sys_madvise(vma_entry->start,
+//						  vma_entry_len(vma_entry),
+//						  m);
+//				if (ret) {
+//					pr_err("madvise(%"PRIx64", %"PRIu64", %ld) "
+//					       "failed with %ld\n",
+//						vma_entry->start,
+//						vma_entry_len(vma_entry),
+//						m, ret);
+//					goto core_restore_end;
+//				}
+//			}
+//		}
+//	}
+        ret = vas_attach(0, 1, O_RDWR);
+	if(ret != 0) {
+               goto core_restore_end;
 	}
 
 	ret = 0;

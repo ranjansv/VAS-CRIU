@@ -22,6 +22,7 @@ extern int parasite_dump_pages_seized(struct pstree_item *item,
 				      struct vm_area_list *vma_area_list,
 				      struct mem_dump_ctl *mdc,
 				      struct parasite_ctl *ctl);
+extern int vas_cow_pages(struct pstree_item *item);
 
 #define PME_PRESENT		(1ULL << 63)
 #define PME_SWAP		(1ULL << 62)

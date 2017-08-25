@@ -1193,7 +1193,7 @@ static int dump_one_task(struct pstree_item *item)
 	struct cr_imgset *cr_imgset = NULL;
 	struct parasite_drain_fd *dfds = NULL;
 	struct proc_posix_timers_stat proc_args;
-	struct mem_dump_ctl mdc;
+//	struct mem_dump_ctl mdc;
 
 	INIT_LIST_HEAD(&vmas.h);
 	vmas.nr = 0;
@@ -1323,10 +1323,10 @@ static int dump_one_task(struct pstree_item *item)
 		}
 	}
 
-	mdc.pre_dump = false;
 
-	ret = parasite_dump_pages_seized(item, &vmas, &mdc, parasite_ctl);
-	if (ret)
+	//ret = parasite_dump_pages_seized(item, &vmas, &mdc, parasite_ctl);
+	ret = vas_cow_pages(item);
+	if (ret == -1)
 		goto err_cure;
 
 	ret = parasite_dump_sigacts_seized(parasite_ctl, cr_imgset);

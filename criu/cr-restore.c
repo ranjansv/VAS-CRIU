@@ -1347,8 +1347,8 @@ static int restore_task_with_children(void *_arg)
 		goto err;
 
 
-	if (unmap_guard_pages(current))
-		goto err;
+//	if (unmap_guard_pages(current))
+//		goto err;
 
 	restore_pgid();
 
