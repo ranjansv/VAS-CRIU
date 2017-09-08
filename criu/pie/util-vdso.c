@@ -87,11 +87,13 @@ static int has_elf_identity(Ehdr_t *ehdr)
 #endif
 
 	BUILD_BUG_ON(sizeof(elf_ident) != sizeof(ehdr->e_ident));
+        pr_debug("%s %d\n", __FUNCTION__, __LINE__);
 
 	if (memcmp(ehdr->e_ident, elf_ident, sizeof(elf_ident))) {
 		pr_err("Elf header magic mismatch\n");
 		return false;
 	}
+        pr_debug("%s %d\n", __FUNCTION__, __LINE__);
 
 	return true;
 }
@@ -104,23 +106,28 @@ static int parse_elf_phdr(uintptr_t mem, size_t size,
 	Phdr_t *phdr;
 	int i;
 
+        pr_debug("%s %d\n", __FUNCTION__, __LINE__);
 	if (__ptr_struct_end_oob(mem, sizeof(Ehdr_t), mem, size))
 		goto err_oob;
+        pr_debug("%s %d\n", __FUNCTION__, __LINE__);
 	/*
 	 * Make sure it's a file we support.
 	 */
 	if (!has_elf_identity(ehdr))
 		return -EINVAL;
 
+        pr_debug("%s %d\n", __FUNCTION__, __LINE__);
 	addr = mem + ehdr->e_phoff;
 	if (__ptr_oob(addr, mem, size))
 		goto err_oob;
+        pr_debug("%s %d\n", __FUNCTION__, __LINE__);
 
 	for (i = 0; i < ehdr->e_phnum; i++, addr += sizeof(Phdr_t)) {
 		if (__ptr_struct_end_oob(addr, sizeof(Phdr_t), mem, size))
 			goto err_oob;
 
 		phdr = (void *)addr;
+		pr_debug("%s %d addr = %p\n", __FUNCTION__, __LINE__, (void *)addr);
 		switch (phdr->p_type) {
 		case PT_DYNAMIC:
 			if (*dynamic) {
@@ -138,6 +145,7 @@ static int parse_elf_phdr(uintptr_t mem, size_t size,
 			break;
 		}
 	}
+        pr_debug("%s %d\n", __FUNCTION__, __LINE__);
 	return 0;
 
 err_oob:

@@ -495,18 +495,18 @@ core_restore_end:
 	return -1;
 }
 
-static long restore_self_exe_late(struct task_restore_args *args)
-{
-	int fd = args->fd_exe_link, ret;
-
-	pr_info("Restoring EXE link\n");
-	ret = sys_prctl_safe(PR_SET_MM, PR_SET_MM_EXE_FILE, fd, 0);
-	if (ret)
-		pr_err("Can't restore EXE link (%d)\n", ret);
-	sys_close(fd);
-
-	return ret;
-}
+//static long restore_self_exe_late(struct task_restore_args *args)
+//{
+//	int fd = args->fd_exe_link, ret;
+//
+//	pr_info("Restoring EXE link\n");
+//	ret = sys_prctl_safe(PR_SET_MM, PR_SET_MM_EXE_FILE, fd, 0);
+//	if (ret)
+//		pr_err("Can't restore EXE link (%d)\n", ret);
+//	sys_close(fd);
+//
+//	return ret;
+//}
 
 //static unsigned long restore_mapping(VmaEntry *vma_entry)
 //{
@@ -1028,9 +1028,9 @@ long __export_restore_task(struct task_restore_args *args)
 	int i;
 //	VmaEntry *vma_entry;
 //	unsigned long va;
+//        int dbg = 1;
 
 	struct rt_sigframe *rt_sigframe;
-	struct prctl_mm_map prctl_map;
 	unsigned long new_sp;
 	k_rtsigset_t to_block;
 	pid_t my_pid = sys_getpid();
@@ -1066,13 +1066,16 @@ long __export_restore_task(struct task_restore_args *args)
 
 	pr_info("Switched to the restorer %d\n", my_pid);
 
+//	while(dbg==1);
+
 	if (vdso_do_park(&args->vdso_sym_rt, args->vdso_rt_parked_at, vdso_rt_size))
 		goto core_restore_end;
 
 	if (unmap_old_vmas((void *)args->premmapped_addr, args->premmapped_len,
 				bootstrap_start, bootstrap_len, args->task_size))
 		goto core_restore_end;
-
+        pr_info("Unmapped old vmas\n");
+	pr_debug("Test dbg message\n");
 //	/* Shift private vma-s to the left */
 //	for (i = 0; i < args->vmas_n; i++) {
 //		vma_entry = args->vmas + i;
@@ -1128,6 +1131,18 @@ long __export_restore_task(struct task_restore_args *args)
 //			goto core_restore_end;
 //		}
 //	}
+        ret = vas_attach(0, 1, O_RDWR);
+	if(ret != 0) {
+	       pr_debug("vas attach failed\n");
+               goto core_restore_end;
+	}
+        pr_info("vas_attach completed successully\n");
+	ret = 0;
+	ret = vas_switch(1);
+	if(ret != 0) {
+	       pr_debug("vas switch failed\n");
+               goto core_restore_end;
+	}
 
 #ifdef CONFIG_VDSO
 	/*
@@ -1144,6 +1159,7 @@ long __export_restore_task(struct task_restore_args *args)
 		}
 	}
 #endif
+        pr_info("Completed vdso proxification\n");
 
 //	/*
 //	 * Walk though all VMAs again to drop PROT_WRITE
@@ -1198,12 +1214,6 @@ long __export_restore_task(struct task_restore_args *args)
 //			}
 //		}
 //	}
-        ret = vas_attach(0, 1, O_RDWR);
-	if(ret != 0) {
-               goto core_restore_end;
-	}
-
-	ret = 0;
 
 	/*
 	 * Tune up the task fields.
@@ -1211,58 +1221,58 @@ long __export_restore_task(struct task_restore_args *args)
 	ret = sys_prctl_safe(PR_SET_NAME, (long)args->comm, 0, 0);
 	if (ret)
 		goto core_restore_end;
-
-	/*
-	 * New kernel interface with @PR_SET_MM_MAP will become
-	 * more widespread once kernel get deployed over the world.
-	 * Thus lets be opportunistic and use new inteface as a try.
-	 */
-	prctl_map = (struct prctl_mm_map) {
-		.start_code	= args->mm.mm_start_code,
-		.end_code	= args->mm.mm_end_code,
-		.start_data	= args->mm.mm_start_data,
-		.end_data	= args->mm.mm_end_data,
-		.start_stack	= args->mm.mm_start_stack,
-		.start_brk	= args->mm.mm_start_brk,
-		.brk		= args->mm.mm_brk,
-		.arg_start	= args->mm.mm_arg_start,
-		.arg_end	= args->mm.mm_arg_end,
-		.env_start	= args->mm.mm_env_start,
-		.env_end	= args->mm.mm_env_end,
-		.auxv		= (void *)args->mm_saved_auxv,
-		.auxv_size	= args->mm_saved_auxv_size,
-		.exe_fd		= args->fd_exe_link,
-	};
-	ret = sys_prctl(PR_SET_MM, PR_SET_MM_MAP, (long)&prctl_map, sizeof(prctl_map), 0);
-	if (ret == -EINVAL) {
-		ret  = sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_CODE,	(long)args->mm.mm_start_code, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_END_CODE,	(long)args->mm.mm_end_code, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_DATA,	(long)args->mm.mm_start_data, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_END_DATA,	(long)args->mm.mm_end_data, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_STACK,	(long)args->mm.mm_start_stack, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_BRK,	(long)args->mm.mm_start_brk, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_BRK,		(long)args->mm.mm_brk, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ARG_START,	(long)args->mm.mm_arg_start, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ARG_END,	(long)args->mm.mm_arg_end, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ENV_START,	(long)args->mm.mm_env_start, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ENV_END,	(long)args->mm.mm_env_end, 0);
-		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_AUXV,	(long)args->mm_saved_auxv, args->mm_saved_auxv_size);
-
-		/*
-		 * Because of requirements applied from kernel side
-		 * we need to restore /proc/pid/exe symlink late,
-		 * after old existing VMAs are superseded with
-		 * new ones from image file.
-		 */
-		ret |= restore_self_exe_late(args);
-	} else {
-		if (ret)
-			pr_err("sys_prctl(PR_SET_MM, PR_SET_MM_MAP) failed with %d\n", (int)ret);
-		sys_close(args->fd_exe_link);
-	}
-
-	if (ret)
-		goto core_restore_end;
+        pr_info("Completed renaming of process\n");
+//	/*
+//	 * New kernel interface with @PR_SET_MM_MAP will become
+//	 * more widespread once kernel get deployed over the world.
+//	 * Thus lets be opportunistic and use new inteface as a try.
+//	 */
+//	prctl_map = (struct prctl_mm_map) {
+//		.start_code	= args->mm.mm_start_code,
+//		.end_code	= args->mm.mm_end_code,
+//		.start_data	= args->mm.mm_start_data,
+//		.end_data	= args->mm.mm_end_data,
+//		.start_stack	= args->mm.mm_start_stack,
+//		.start_brk	= args->mm.mm_start_brk,
+//		.brk		= args->mm.mm_brk,
+//		.arg_start	= args->mm.mm_arg_start,
+//		.arg_end	= args->mm.mm_arg_end,
+//		.env_start	= args->mm.mm_env_start,
+//		.env_end	= args->mm.mm_env_end,
+//		.auxv		= (void *)args->mm_saved_auxv,
+//		.auxv_size	= args->mm_saved_auxv_size,
+//		.exe_fd		= args->fd_exe_link,
+//	};
+//	ret = sys_prctl(PR_SET_MM, PR_SET_MM_MAP, (long)&prctl_map, sizeof(prctl_map), 0);
+//	if (ret == -EINVAL) {
+//		ret  = sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_CODE,	(long)args->mm.mm_start_code, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_END_CODE,	(long)args->mm.mm_end_code, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_DATA,	(long)args->mm.mm_start_data, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_END_DATA,	(long)args->mm.mm_end_data, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_STACK,	(long)args->mm.mm_start_stack, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_START_BRK,	(long)args->mm.mm_start_brk, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_BRK,		(long)args->mm.mm_brk, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ARG_START,	(long)args->mm.mm_arg_start, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ARG_END,	(long)args->mm.mm_arg_end, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ENV_START,	(long)args->mm.mm_env_start, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_ENV_END,	(long)args->mm.mm_env_end, 0);
+//		ret |= sys_prctl_safe(PR_SET_MM, PR_SET_MM_AUXV,	(long)args->mm_saved_auxv, args->mm_saved_auxv_size);
+//
+//		/*
+//		 * Because of requirements applied from kernel side
+//		 * we need to restore /proc/pid/exe symlink late,
+//		 * after old existing VMAs are superseded with
+//		 * new ones from image file.
+//		 */
+//		ret |= restore_self_exe_late(args);
+//	} else {
+//		if (ret)
+//			pr_err("sys_prctl(PR_SET_MM, PR_SET_MM_MAP) failed with %d\n", (int)ret);
+//		sys_close(args->fd_exe_link);
+//	}
+//
+//	if (ret)
+//		goto core_restore_end;
 
 	/*
 	 * We need to prepare a valid sigframe here, so
@@ -1274,6 +1284,7 @@ long __export_restore_task(struct task_restore_args *args)
 
 	if (restore_thread_common(args->t))
 		goto core_restore_end;
+	pr_info("Completed restore_thread_common\n");
 
 	/*
 	 * Threads restoration. This requires some more comments. This
@@ -1454,6 +1465,7 @@ long __export_restore_task(struct task_restore_args *args)
 	 * pure assembly since we don't need any additional
 	 * code insns from gcc.
 	 */
+
 	rst_sigreturn(new_sp);
 
 core_restore_end:

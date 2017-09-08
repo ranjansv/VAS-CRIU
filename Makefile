@@ -92,6 +92,7 @@ export PROTOUFIX DEFINES USERCFLAGS
 
 #
 # Independent options for all tools.
+DEBUG			:= 1
 DEFINES			+= -D_FILE_OFFSET_BITS=64
 DEFINES			+= -D_GNU_SOURCE
 
