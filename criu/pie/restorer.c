@@ -4,6 +4,7 @@
 #include <linux/securebits.h>
 #include <linux/capability.h>
 #include <linux/aio_abi.h>
+#include <linux/vas.h>
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/file.h>
@@ -11,6 +12,7 @@
 #include <sys/wait.h>
 #include <sys/time.h>
 #include <sys/shm.h>
+#include <sys/syscall.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sched.h>
@@ -1028,7 +1030,7 @@ long __export_restore_task(struct task_restore_args *args)
 	int i;
 //	VmaEntry *vma_entry;
 //	unsigned long va;
-//        int dbg = 1;
+        int dbg = 1;
 
 	struct rt_sigframe *rt_sigframe;
 	unsigned long new_sp;
@@ -1066,16 +1068,15 @@ long __export_restore_task(struct task_restore_args *args)
 
 	pr_info("Switched to the restorer %d\n", my_pid);
 
-//	while(dbg==1);
 
-	if (vdso_do_park(&args->vdso_sym_rt, args->vdso_rt_parked_at, vdso_rt_size))
-		goto core_restore_end;
+//	if (vdso_do_park(&args->vdso_sym_rt, args->vdso_rt_parked_at, vdso_rt_size))
+//		goto core_restore_end;
 
 	if (unmap_old_vmas((void *)args->premmapped_addr, args->premmapped_len,
 				bootstrap_start, bootstrap_len, args->task_size))
 		goto core_restore_end;
         pr_info("Unmapped old vmas\n");
-	pr_debug("Test dbg message\n");
+	while(dbg==1);
 //	/* Shift private vma-s to the left */
 //	for (i = 0; i < args->vmas_n; i++) {
 //		vma_entry = args->vmas + i;
@@ -1131,20 +1132,23 @@ long __export_restore_task(struct task_restore_args *args)
 //			goto core_restore_end;
 //		}
 //	}
-        ret = vas_attach(0, 1, O_RDWR);
+
+//        ret = vas_attach(0, 1, O_RDWR);
+	ret = syscall(SYS_vas_attach, 0, 1, O_RDWR);
 	if(ret != 0) {
 	       pr_debug("vas attach failed\n");
                goto core_restore_end;
 	}
-        pr_info("vas_attach completed successully\n");
-	ret = 0;
-	ret = vas_switch(1);
+        pr_info("vas_attach succesfull\n");
+	ret = syscall(SYS_vas_switch, 1);
 	if(ret != 0) {
 	       pr_debug("vas switch failed\n");
                goto core_restore_end;
 	}
+        pr_info("vas_switch succesfull\n");
 
-#ifdef CONFIG_VDSO
+//#ifdef CONFIG_VDSO
+#if 0 
 	/*
 	 * Proxify vDSO.
 	 */
