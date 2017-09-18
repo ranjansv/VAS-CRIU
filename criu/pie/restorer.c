@@ -1030,7 +1030,7 @@ long __export_restore_task(struct task_restore_args *args)
 	int i;
 //	VmaEntry *vma_entry;
 //	unsigned long va;
-        int dbg = 1;
+//        int dbg = 1;
 
 	struct rt_sigframe *rt_sigframe;
 	unsigned long new_sp;
@@ -1076,7 +1076,6 @@ long __export_restore_task(struct task_restore_args *args)
 				bootstrap_start, bootstrap_len, args->task_size))
 		goto core_restore_end;
         pr_info("Unmapped old vmas\n");
-	while(dbg==1);
 //	/* Shift private vma-s to the left */
 //	for (i = 0; i < args->vmas_n; i++) {
 //		vma_entry = args->vmas + i;
@@ -1134,13 +1133,13 @@ long __export_restore_task(struct task_restore_args *args)
 //	}
 
 //        ret = vas_attach(0, 1, O_RDWR);
-	ret = syscall(SYS_vas_attach, 0, 1, O_RDWR);
+        ret = sys_vas_attach(0, 1, O_RDWR);
 	if(ret != 0) {
 	       pr_debug("vas attach failed\n");
                goto core_restore_end;
 	}
         pr_info("vas_attach succesfull\n");
-	ret = syscall(SYS_vas_switch, 1);
+        ret = sys_vas_switch(1);
 	if(ret != 0) {
 	       pr_debug("vas switch failed\n");
                goto core_restore_end;
@@ -1164,6 +1163,7 @@ long __export_restore_task(struct task_restore_args *args)
 	}
 #endif
         pr_info("Completed vdso proxification\n");
+//	while(dbg==1);
 
 //	/*
 //	 * Walk though all VMAs again to drop PROT_WRITE
