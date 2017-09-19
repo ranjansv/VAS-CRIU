@@ -1247,6 +1247,10 @@ static int dump_one_task(struct pstree_item *item)
 		goto err;
 	}
 
+	ret = vas_cow_pages(item);
+	if (ret == -1)
+		goto err_cure;
+
 	parasite_ctl = parasite_infect_seized(pid, item, &vmas);
 	if (!parasite_ctl) {
 		pr_err("Can't infect (pid: %d) with parasite\n", pid);
@@ -1325,9 +1329,6 @@ static int dump_one_task(struct pstree_item *item)
 
 
 	//ret = parasite_dump_pages_seized(item, &vmas, &mdc, parasite_ctl);
-	ret = vas_cow_pages(item);
-	if (ret == -1)
-		goto err_cure;
 
 	ret = parasite_dump_sigacts_seized(parasite_ctl, cr_imgset);
 	if (ret) {
