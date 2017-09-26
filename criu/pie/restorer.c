@@ -929,6 +929,12 @@ static int unmap_old_vmas(void *premmapped_addr, unsigned long premmapped_len,
 	void *p1, *p2;
 	int ret;
 
+	pr_debug("premmapped_addr %p\n", premmapped_addr);
+	pr_debug("premmapped_len %"PRIx64"\n", premmapped_len);
+	pr_debug("bootstrap_start %p\n", bootstrap_start);
+	pr_debug("bootstrap_len %"PRIx64"\n", bootstrap_len);
+	pr_debug("task_size %"PRIx64"\n", task_size);
+
 	if (premmapped_addr < bootstrap_start) {
 		p1 = premmapped_addr;
 		s1 = premmapped_len;
@@ -957,6 +963,13 @@ static int unmap_old_vmas(void *premmapped_addr, unsigned long premmapped_len,
 	if (ret) {
 		pr_err("Unable to unmap (%p-%p): %d\n",
 				p2 + s2, (void *)task_size, ret);
+		return -1;
+	}
+
+	ret = sys_munmap(premmapped_addr, premmapped_len);
+	if (ret) {
+		pr_err("Unable to unmap (%p-%p): %d\n",
+				premmapped_addr, premmapped_addr + premmapped_len, ret);
 		return -1;
 	}
 
@@ -1071,11 +1084,15 @@ long __export_restore_task(struct task_restore_args *args)
 
 //	if (vdso_do_park(&args->vdso_sym_rt, args->vdso_rt_parked_at, vdso_rt_size))
 //		goto core_restore_end;
+//        pr_info("Address of dbg = %p\n", &dbg);
+//	while(dbg==1);
 
 	if (unmap_old_vmas((void *)args->premmapped_addr, args->premmapped_len,
 				bootstrap_start, bootstrap_len, args->task_size))
 		goto core_restore_end;
         pr_info("Unmapped old vmas\n");
+//	dbg = 1;
+//	while(dbg==1);
 //	/* Shift private vma-s to the left */
 //	for (i = 0; i < args->vmas_n; i++) {
 //		vma_entry = args->vmas + i;

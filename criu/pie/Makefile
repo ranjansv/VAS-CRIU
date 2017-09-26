@@ -69,7 +69,7 @@ endif
 endif
 
 ifeq ($(strip $(V)),)
-#        piegen_stdout := >/dev/null
+        piegen_stdout := >/dev/null
 endif
 
 $(obj)/%.built-in.bin.o: $(obj)/%.built-in.o $(obj)/lib.a $(obj)/$(PIELDS)

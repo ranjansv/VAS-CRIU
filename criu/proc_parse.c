@@ -439,6 +439,8 @@ int parse_self_maps_lite(struct vm_area_list *vms)
 		s = strtoul(buf, &end, 16);
 		e = strtoul(end + 1, NULL, 16);
 
+		pr_debug("range read %"PRIx64"-%"PRIx64"\n", s, e);
+
 		if (prev && prev->e->end == s)
 			/*
 			 * This list is needed for one thing only -- to
