@@ -401,8 +401,9 @@ out:
 int vas_cow_pages(struct pstree_item *item)
 {
    int ret;
-
+   timing_start(TIME_VASFORK);
    ret = vas_fork(item->pid->real);
+   timing_stop(TIME_VASFORK);
 
    if (ret == -1) {
        pr_err("Can't vas_fork memory\n");
