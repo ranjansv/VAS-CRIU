@@ -29,4 +29,5 @@ message mm_entry {
 
 	optional int32	dumpable	= 15;
 	repeated aio_ring_entry	aios	= 16;
+	required uint32 vid		= 17;
 }

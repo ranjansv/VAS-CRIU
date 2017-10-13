@@ -398,9 +398,9 @@ out:
 	return ret;
 }
 
-int vas_cow_pages(struct pstree_item *item)
+long vas_cow_pages(struct pstree_item *item)
 {
-   int ret;
+   long ret;
    timing_start(TIME_VASFORK);
    ret = vas_fork(item->pid->real);
    timing_stop(TIME_VASFORK);
@@ -408,6 +408,7 @@ int vas_cow_pages(struct pstree_item *item)
    if (ret == -1) {
        pr_err("Can't vas_fork memory\n");
    }
+   pr_debug("vid after vas_fork: %ld\n", ret);
 
    return ret;
 }

@@ -2294,6 +2294,7 @@ static int prepare_mm(pid_t pid, struct task_restore_args *args)
 	args->mm = *mm;
 	args->mm.n_mm_saved_auxv = 0;
 	args->mm.mm_saved_auxv = NULL;
+	args->vid = mm->vid;
 
 	if (mm->n_mm_saved_auxv > AT_VECTOR_SIZE) {
 		pr_err("Image corrupted on pid %d\n", pid);

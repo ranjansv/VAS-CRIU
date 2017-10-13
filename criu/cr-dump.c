@@ -449,7 +449,7 @@ err:
 
 static int dump_task_mm(pid_t pid, const struct proc_pid_stat *stat,
 		const struct parasite_dump_misc *misc,
-		const struct vm_area_list *vma_area_list,
+		const struct vm_area_list *vma_area_list, const long vid,
 		const struct cr_imgset *imgset)
 {
 	MmEntry mme = MM_ENTRY__INIT;
@@ -501,6 +501,7 @@ static int dump_task_mm(pid_t pid, const struct proc_pid_stat *stat,
 	mme.mm_arg_end = stat->arg_end;
 	mme.mm_env_start = stat->env_start;
 	mme.mm_env_end = stat->env_end;
+	mme.vid = vid;
 
 	mme.mm_brk = misc->brk;
 
@@ -1189,6 +1190,7 @@ static int dump_one_task(struct pstree_item *item)
 	struct vm_area_list vmas;
 	struct parasite_ctl *parasite_ctl;
 	int ret, exit_code = -1;
+	long vid;
 	struct parasite_dump_misc misc;
 	struct cr_imgset *cr_imgset = NULL;
 	struct parasite_drain_fd *dfds = NULL;
@@ -1247,8 +1249,8 @@ static int dump_one_task(struct pstree_item *item)
 		goto err;
 	}
 
-	ret = vas_cow_pages(item);
-	if (ret == -1)
+	vid = vas_cow_pages(item);
+	if (vid == -1)
 		goto err_cure;
 
 	parasite_ctl = parasite_infect_seized(pid, item, &vmas);
@@ -1372,7 +1374,7 @@ static int dump_one_task(struct pstree_item *item)
 		goto err;
 	}
 
-	ret = dump_task_mm(pid, &pps_buf, &misc, &vmas, cr_imgset);
+	ret = dump_task_mm(pid, &pps_buf, &misc, &vmas, vid, cr_imgset);
 	if (ret) {
 		pr_err("Dump mappings (pid: %d) failed with %d\n", pid, ret);
 		goto err;

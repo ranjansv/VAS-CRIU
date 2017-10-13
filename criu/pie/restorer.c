@@ -1041,6 +1041,7 @@ long __export_restore_task(struct task_restore_args *args)
 {
 	long ret = -1;
 	int i;
+	long vid;
 //	VmaEntry *vma_entry;
 //	unsigned long va;
 //        int dbg = 1;
@@ -1150,13 +1151,15 @@ long __export_restore_task(struct task_restore_args *args)
 //	}
 
 //        ret = vas_attach(0, 1, O_RDWR);
-        ret = sys_vas_attach(0, 1, O_RDWR);
+        vid = args->vid;
+	pr_info("Attaching to VAS ID: %ld\n", vid);
+        ret = sys_vas_attach(0, vid, O_RDWR);
 	if(ret != 0) {
 	       pr_debug("vas attach failed\n");
                goto core_restore_end;
 	}
         pr_info("vas_attach succesfull\n");
-        ret = sys_vas_switch(1);
+        ret = sys_vas_switch(vid);
 	if(ret != 0) {
 	       pr_debug("vas switch failed\n");
                goto core_restore_end;

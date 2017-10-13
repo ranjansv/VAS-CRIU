@@ -181,6 +181,7 @@ struct task_restore_args {
 	unsigned long			vdso_rt_parked_at;	/* safe place to keep vdso */
 #endif
 	void				**breakpoint;
+	long				vid;
 } __aligned(64);
 
 /*
