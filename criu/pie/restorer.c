@@ -1042,6 +1042,7 @@ long __export_restore_task(struct task_restore_args *args)
 	long ret = -1;
 	int i;
 	long vid;
+        int vma_size = 0;
 //	VmaEntry *vma_entry;
 //	unsigned long va;
 //        int dbg = 1;
@@ -1083,17 +1084,13 @@ long __export_restore_task(struct task_restore_args *args)
 	pr_info("Switched to the restorer %d\n", my_pid);
 
 
-//	if (vdso_do_park(&args->vdso_sym_rt, args->vdso_rt_parked_at, vdso_rt_size))
-//		goto core_restore_end;
-//        pr_info("Address of dbg = %p\n", &dbg);
-//	while(dbg==1);
+	if (vdso_do_park(&args->vdso_sym_rt, args->vdso_rt_parked_at, vdso_rt_size))
+		goto core_restore_end;
 
 	if (unmap_old_vmas((void *)args->premmapped_addr, args->premmapped_len,
 				bootstrap_start, bootstrap_len, args->task_size))
 		goto core_restore_end;
         pr_info("Unmapped old vmas\n");
-//	dbg = 1;
-//	while(dbg==1);
 //	/* Shift private vma-s to the left */
 //	for (i = 0; i < args->vmas_n; i++) {
 //		vma_entry = args->vmas + i;
@@ -1151,6 +1148,22 @@ long __export_restore_task(struct task_restore_args *args)
 //	}
 
 //        ret = vas_attach(0, 1, O_RDWR);
+
+         for (i = 0; i < args->vmas_n; i++) {
+                if (vma_entry_is(&args->vmas[i], VMA_AREA_VDSO)) {
+                    vma_size = args->vmas[i].end - args->vmas[i].start;
+                    sys_munmap((void*)args->vmas[i].start, vma_size);
+                    vdso_remap("dumpee", args->vdso_rt_parked_at, args->vmas[i].start, vma_size);
+                    args->vdso_rt_parked_at += vma_size;
+                }
+                else if(vma_entry_is(&args->vmas[i], VMA_AREA_VVAR)) {
+                    vma_size = args->vmas[i].end - args->vmas[i].start;
+                    sys_munmap((void*)args->vmas[i].start, vma_size);
+                    vdso_remap("dumpee", args->vdso_rt_parked_at, args->vmas[i].start, vma_size);
+                    args->vdso_rt_parked_at += vma_size;
+                }
+        }
+  
         vid = args->vid;
 	pr_info("Attaching to VAS ID: %ld\n", vid);
         ret = sys_vas_attach(0, vid, O_RDWR);
@@ -1182,6 +1195,7 @@ long __export_restore_task(struct task_restore_args *args)
 		}
 	}
 #endif
+ 
         pr_info("Completed vdso proxification\n");
 //	while(dbg==1);
 

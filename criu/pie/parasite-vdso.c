@@ -25,7 +25,7 @@
 #define LOG_PREFIX "vdso: "
 
 
-static int vdso_remap(char *who, unsigned long from, unsigned long to, size_t size)
+int vdso_remap(char *who, unsigned long from, unsigned long to, size_t size)
 {
 	unsigned long addr;
 

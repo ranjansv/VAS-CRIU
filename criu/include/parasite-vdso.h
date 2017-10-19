@@ -83,6 +83,7 @@ extern int vdso_do_park(struct vdso_symtable *sym_rt, unsigned long park_at, uns
 extern int vdso_proxify(char *who, struct vdso_symtable *sym_rt,
 			unsigned long vdso_rt_parked_at, size_t index,
 			VmaEntry *vmas, size_t nr_vmas);
+extern int vdso_remap(char *who, unsigned long from, unsigned long to, size_t size);
 
 #else /* CONFIG_VDSO */
 #define vdso_do_park(sym_rt, park_at, park_size)		(0)
