@@ -105,3 +105,4 @@ __NR_kcmp			312		sys_kcmp		(pid_t pid1, pid_t pid2, int type, unsigned long idx1
 __NR_memfd_create		319		sys_memfd_create	(const char *name, unsigned int flags)
 __NR_vas_attach			335		sys_vas_attach		(pid_t pid, int vid, int type)
 __NR_vas_switch			337		sys_vas_switch		(int vid)
+__NR_vas_exec			349		sys_vas_exec		(int pid, int vid)
