@@ -1278,13 +1278,13 @@ static int dump_one_task(struct pstree_item *item)
 
 		close(pfd);
 	}
-
+/*
 	ret = parasite_fixup_vdso(parasite_ctl, pid, &vmas);
 	if (ret) {
 		pr_err("Can't fixup vdso VMAs (pid: %d)\n", pid);
 		goto err_cure_imgset;
 	}
-
+*/
 	ret = parasite_collect_aios(parasite_ctl, &vmas); /* FIXME -- merge with above */
 	if (ret) {
 		pr_err("Failed to check aio rings (pid: %d)\n", pid);
