@@ -1,3 +1,17 @@
+## VAS-CRIU 
+
+VAS-CRIU is built for fast in-memory checkpoint/restore for processes.
+It snapshots memory state of a process into a process indepedent address space
+which can used for restore. 
+
+Dependencies of VAS-CRIU
+- Linux 4.10+ kernel with support Multiple Virtual Address Spaces(MVAS)
+- libmvas, a library containing wrappers for VAS system calls
+- mvas CLI, a command line to tool to list, create, remove VASes
+
+VAS-CRIU supports the same CLI options as CRIU.
+
+
 ## CRIU (Checkpoint and Restore in Userspace)
 
 An utility to checkpoint/restore tasks. Using this tool, you can freeze a
