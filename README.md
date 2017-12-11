@@ -11,6 +11,30 @@ Dependencies of VAS-CRIU
 
 VAS-CRIU supports the same CLI options as CRIU.
 
+Eg:
+$>criu dump -t PID  -vvv dump.log
+
+List VASes in the system, each new checkpoint will be stored in a VAs with a unique ID. This VAS ID 
+is store in mm.img file.
+
+$>mvas -la
+/sys/kernel/vas/1/
+user: 0
+mode: 0600
+group: 0
+name: CP-24694-4576337492
+
+/sys/kernel/vas/2/
+user: 0
+mode: 0600
+group: 0
+name: CP-3374-4576337560
+
+
+$>criu restore -vvv restore.log
+
+
+
 
 ## CRIU (Checkpoint and Restore in Userspace)
 
