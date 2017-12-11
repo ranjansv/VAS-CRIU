@@ -14,7 +14,7 @@ VAS-CRIU supports the same CLI options as CRIU.
 Eg:
 $>criu dump -t PID  -vvv dump.log
 
-List VASes in the system, each new checkpoint will be stored in a VAs with a unique ID. This VAS ID 
+List VASes in the system, each new checkpoint will be stored in a VAS with a unique ID. This VAS ID 
 is store in mm.img file.
 
 $>mvas -la
